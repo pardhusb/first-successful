@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="2c4abad8-c0fa-40b9-9efd-babec41b1f06" >
+		<http:listener-connection host="${http.host}" port="${http.port}" />
+	</http:listener-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="8186448b-e475-4d78-aa4e-bd613584070d" >
+		<db:my-sql-connection host="${db.host}" port="${db.port}" user="${secure::db.user}" password="${secure::db.password}" database="${db.database}" />
+	</db:config>
+	<configuration-properties doc:name="Configuration properties" doc:id="4429ff63-d7fd-4f5f-a331-53c7258fb3bf" file="${env}.properties" />
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="cc0fa6be-ef48-4f0b-82ce-04b30d6a28cc" file="${env}.secure.properties" key="${key}" >
+		<secure-properties:encrypt algorithm="Blowfish" />
+	</secure-properties:config>
+	<flow name="first-success-untill-successFlow" doc:id="b037492a-aaf9-4cf5-8453-9ab8305d0778" >
+		<http:listener doc:name="Listener" doc:id="4cd0f36d-3df4-4864-b449-feaa329966fc" config-ref="HTTP_Listener_config" path="${http.path}">
+			<http:error-response >
+				<http:body ><![CDATA[#[payload]]]></http:body>
+			</http:error-response>
+		</http:listener>
+		<first-successful doc:name="First Successful" doc:id="e2e928b2-6ad2-472b-93f4-d9e897620596" >
+			<route >
+				<db:select doc:name="Select" doc:id="fc6f5f76-2623-4063-b394-4d42ffdb175d" config-ref="Database_Config">
+					<db:sql ><![CDATA[SELECT * FROM customer_management]]></db:sql>
+				</db:select>
+				<ee:transform doc:name="Transform Message" doc:id="8cac2da4-265f-476c-9ed6-634783e72cef">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</route>
+			<route >
+				<ee:transform doc:name="Transform Message" doc:id="92b353d9-ebc1-4af6-b097-c3bd2fb083c4" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message" : "second route excuted"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<raise-error doc:name="Raise error" doc:id="19ffb664-efbb-478f-a2bb-1fffa47385a4" type="CE:SECOND_ROUTE_ERROR"/>
+			</route>
+			<route >
+				<ee:transform doc:name="Transform Message" doc:id="ab9247e1-e3b4-4db2-821e-735e8603d574" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message" : "third route excuted"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<raise-error doc:name="Raise error" doc:id="8caf7e53-e130-4b51-a70a-935cc2ebe236" type="CE:THIRD_ROUTE_ERROR"/>
+			</route>
+		</first-successful>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="b7590238-bdf3-426a-982c-f7667ba49d65" >
+				<ee:transform doc:name="Transform Message" doc:id="27965ca6-61bd-4074-8920-d4ad57b7d388" >
+					<ee:message >
+						<ee:set-payload ><![CDATA["all routes are failed to process.please try again"]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+</mule>
